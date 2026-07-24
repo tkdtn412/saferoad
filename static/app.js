@@ -7,6 +7,11 @@ const policeCount = document.querySelector("#policeCount");
 const lastUpdated = document.querySelector("#lastUpdated");
 const visionForm = document.querySelector("#visionForm");
 const visionStatus = document.querySelector("#visionStatus");
+const loginBtn = document.querySelector("#loginBtn");
+const logoutBtn = document.querySelector("#logoutBtn");
+const authUser = document.querySelector("#authUser");
+const authAvatar = document.querySelector("#authAvatar");
+const authName = document.querySelector("#authName");
 
 function formatTime(value) {
   return new Date(value).toLocaleString();
@@ -67,6 +72,39 @@ async function simulateDetection() {
   }
 }
 
+async function loadAuthState() {
+  try {
+    const response = await fetch("/api/auth/me");
+    const payload = await response.json();
+    if (payload.authenticated && payload.user) {
+      loginBtn.hidden = true;
+      authUser.hidden = false;
+      logoutBtn.hidden = false;
+      authAvatar.src = payload.user.avatar_url || "";
+      authAvatar.hidden = !payload.user.avatar_url;
+      authName.textContent = payload.user.login;
+    } else {
+      authUser.hidden = true;
+      logoutBtn.hidden = true;
+      loginBtn.hidden = false;
+      if (!payload.configured) {
+        loginBtn.classList.add("disabled");
+        loginBtn.title = "Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET on the server to enable GitHub login.";
+      } else {
+        loginBtn.classList.remove("disabled");
+        loginBtn.title = "";
+      }
+    }
+  } catch (error) {
+    loginBtn.hidden = false;
+  }
+}
+
+logoutBtn.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  await loadAuthState();
+});
+
 simulateBtn.addEventListener("click", simulateDetection);
 refreshBtn.addEventListener("click", loadEvents);
 visionForm.addEventListener("submit", async (event) => {
@@ -88,5 +126,6 @@ visionForm.addEventListener("submit", async (event) => {
     visionStatus.textContent = error.message;
   }
 });
+loadAuthState();
 loadEvents();
 setInterval(loadEvents, 10000);

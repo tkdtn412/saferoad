@@ -14,6 +14,14 @@
           <h1>Safe Road</h1>
         </div>
         <div class="actions">
+          <div id="authArea" class="auth-area">
+            <a id="loginBtn" class="button-link github" href="/auth/github/login" hidden>Sign in with GitHub</a>
+            <span id="authUser" class="auth-user" hidden>
+              <img id="authAvatar" class="auth-avatar" alt="" />
+              <span id="authName"></span>
+            </span>
+            <button id="logoutBtn" type="button" class="secondary" hidden>Log out</button>
+          </div>
           <button id="simulateBtn" type="button">Simulate Detection</button>
           <button id="refreshBtn" type="button" class="secondary">Refresh</button>
         </div>

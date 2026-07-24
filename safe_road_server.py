@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 import cgi
 import json
 import random
 from datetime import datetime, timezone
 
+import github_auth
 from vision_detector import detect_hazards_from_image
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -145,8 +146,57 @@ class SafeRoadHandler(SimpleHTTPRequestHandler):
         )
         return form
 
+    def send_redirect(self, location, cookie=None):
+        self.send_response(302)
+        self.send_header("Location", location)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def current_session_token(self):
+        return github_auth.session_token_from_cookie_header(self.headers.get("Cookie"))
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/auth/github/login":
+            if not github_auth.is_configured():
+                self.send_json(
+                    {
+                        "error": "GitHub login is not configured.",
+                        "hint": "Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET, then restart the server.",
+                    },
+                    status=503,
+                )
+                return
+            self.send_redirect(github_auth.build_authorize_url())
+            return
+        if parsed.path == "/auth/github/callback":
+            params = parse_qs(parsed.query)
+            code = params.get("code", [""])[0]
+            state = params.get("state", [""])[0]
+            if not code or not github_auth.consume_state(state):
+                self.send_json({"error": "Invalid or expired GitHub login attempt. Try again."}, status=400)
+                return
+            try:
+                user = github_auth.exchange_code_for_user(code)
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                self.send_json({"error": f"GitHub login failed: {error}"}, status=502)
+                return
+            token = github_auth.create_session(user)
+            cookie = f"{github_auth.SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax"
+            self.send_redirect("/", cookie=cookie)
+            return
+        if parsed.path == "/api/auth/me":
+            user = github_auth.get_session_user(self.current_session_token())
+            self.send_json(
+                {
+                    "configured": github_auth.is_configured(),
+                    "authenticated": user is not None,
+                    "user": user,
+                }
+            )
+            return
         if parsed.path == "/api/detections":
             detections = sorted(load_detections(), key=lambda item: item["created_at"], reverse=True)
             self.send_json({"detections": detections})
@@ -158,6 +208,21 @@ class SafeRoadHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/auth/logout":
+            token = self.current_session_token()
+            github_auth.destroy_session(token)
+            body = json.dumps({"ok": True}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Set-Cookie",
+                f"{github_auth.SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+            )
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if parsed.path == "/api/simulate":
             event = simulate_event()
             detections = load_detections()

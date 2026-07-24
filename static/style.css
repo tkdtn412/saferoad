@@ -79,6 +79,43 @@ button.secondary {
   color: var(--ink);
 }
 
+.auth-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border-radius: 6px;
+  padding: 0 16px;
+  background: #24292f;
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button-link.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.auth-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.auth-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
